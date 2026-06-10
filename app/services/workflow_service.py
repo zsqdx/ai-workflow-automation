@@ -8,6 +8,7 @@ from app.schemas.workflow import (
     CreateWorkflowRequest,
     WorkflowResponse,
     WorkflowStatus,
+    WorkflowStepType,
 )
 
 
@@ -18,6 +19,13 @@ class WorkflowService:
                 status_code=400,
                 detail="Workflow must contain at least one step",
             )
+
+        for step in request.steps:
+            if step.type == WorkflowStepType.TOOL and not step.tool_name:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"TOOL step {step.name} must have tool_name",
+                )
 
         workflow = WorkflowDefinition(
             workflow_id=str(uuid4()),

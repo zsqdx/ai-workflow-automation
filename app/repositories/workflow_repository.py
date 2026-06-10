@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from app.models.workflow import WorkflowDefinition
 
@@ -14,7 +14,7 @@ class WorkflowRepository:
     def find_by_id(self, workflow_id: str) -> Optional[WorkflowDefinition]:
         return self._workflows.get(workflow_id)
 
-    def find_all(self):
+    def find_all(self) -> List[WorkflowDefinition]:
         return list(self._workflows.values())
 
 
