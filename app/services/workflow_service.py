@@ -3,13 +3,16 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from app.models.workflow import WorkflowDefinition
-from app.repositories.workflow_repository import workflow_repository
+from app.repositories.dynamodb_workflow_repository import DynamoDBWorkflowRepository
 from app.schemas.workflow import (
     CreateWorkflowRequest,
     WorkflowResponse,
     WorkflowStatus,
     WorkflowStepType,
 )
+
+
+workflow_repository = DynamoDBWorkflowRepository()
 
 
 class WorkflowService:

@@ -4,7 +4,7 @@
 
 This project is a FastAPI-based backend system for AI workflow automation.
 Admin users can define workflow definitions through REST APIs.
-This first version uses in-memory storage, so workflow data is lost when the server restarts.
+This version stores workflow definitions in DynamoDB.
 
 ## Tech Stack
 
@@ -12,7 +12,8 @@ This first version uses in-memory storage, so workflow data is lost when the ser
 - FastAPI
 - Uvicorn
 - Pydantic
-- In-memory Python dictionary storage
+- boto3
+- DynamoDB
 
 ## Current APIs
 
@@ -21,12 +22,32 @@ This first version uses in-memory storage, so workflow data is lost when the ser
 - GET /api/v1/admin/workflows/{workflow_id}
 - GET /api/v1/admin/workflows
 
+## Bonus DynamoDB
+
+This bonus version saves and reads workflow definitions from DynamoDB.
+
+Create this DynamoDB table before running the workflow APIs:
+
+- Table name: `workflow_definitions`
+- Primary key: `workflow_id`
+- Primary key type: String
+- Default region: `us-west-2`
+
+The table name and region can be overridden with environment variables:
+
+- `WORKFLOW_TABLE_NAME`
+- `AWS_REGION`
+
+AWS credentials are required through the normal AWS SDK credential chain, such as `aws configure`, environment variables, or an IAM role. Do not put AWS access keys or secret keys in the code.
+
 ## How to Run
 
 ```bash
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
+$env:AWS_REGION = "us-west-2"
+$env:WORKFLOW_TABLE_NAME = "workflow_definitions"
 uvicorn app.main:app --reload
 ```
 
