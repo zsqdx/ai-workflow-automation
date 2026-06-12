@@ -56,3 +56,71 @@ Open:
 ```text
 http://127.0.0.1:8000/docs
 ```
+
+## Run with Docker
+
+Build image:
+
+```bash
+docker build -t ai-workflow-api .
+```
+
+Run container:
+
+```bash
+docker run -p 8000:8000 ai-workflow-api
+```
+
+Open:
+
+```text
+http://localhost:8000/docs
+```
+
+Run container in the background:
+
+```bash
+docker run -d -p 8000:8000 --name ai-workflow-api-container ai-workflow-api
+```
+
+Check running containers:
+
+```bash
+docker ps
+```
+
+View logs:
+
+```bash
+docker logs ai-workflow-api-container
+```
+
+Stop container:
+
+```bash
+docker stop ai-workflow-api-container
+```
+
+Remove container:
+
+```bash
+docker rm ai-workflow-api-container
+```
+
+Run with environment variables:
+
+```bash
+docker run -p 8000:8000 -e APP_ENV=local -e AWS_REGION=us-west-2 ai-workflow-api
+```
+
+Run with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+Stop Docker Compose:
+
+```bash
+docker compose down
+```
