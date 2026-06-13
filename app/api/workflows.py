@@ -26,6 +26,14 @@ def get_workflow(workflow_id: str):
     return workflow_service.get_workflow(workflow_id)
 
 
+@router.post(
+    "/{workflow_id}/publish",
+    response_model=WorkflowResponse,
+)
+def publish_workflow(workflow_id: str):
+    return workflow_service.publish_workflow(workflow_id)
+
+
 @router.get(
     "",
     response_model=List[WorkflowResponse],

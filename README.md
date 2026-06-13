@@ -20,7 +20,25 @@ This version stores workflow definitions in DynamoDB.
 - GET /health
 - POST /api/v1/admin/workflows
 - GET /api/v1/admin/workflows/{workflow_id}
+- POST /api/v1/admin/workflows/{workflow_id}/publish
 - GET /api/v1/admin/workflows
+- POST /api/v1/tickets
+
+## LLM Router
+
+The ticket API uses the OpenAI Responses API to route customer messages to a
+published workflow. The router reads credentials and model configuration from
+environment variables.
+
+Required:
+
+- `OPENAI_API_KEY`
+
+Optional:
+
+- `OPENAI_MODEL`, default `gpt-4o-mini`
+
+Do not put API keys in code, README files, logs, Docker images, or Git commits.
 
 ## Bonus DynamoDB
 
@@ -48,6 +66,8 @@ venv\Scripts\activate
 pip install -r requirements.txt
 $env:AWS_REGION = "us-west-2"
 $env:WORKFLOW_TABLE_NAME = "workflow_definitions"
+$env:OPENAI_API_KEY = "<your-openai-api-key>"
+$env:OPENAI_MODEL = "gpt-4o-mini"
 uvicorn app.main:app --reload
 ```
 

@@ -1,15 +1,12 @@
 import os
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import List, Optional
 
 import boto3
 
 from app.models.workflow import WorkflowDefinition
-from app.schemas.workflow import (
-    WorkflowStatus,
-    WorkflowStepCreate,
-    WorkflowStepType,
-)
+from app.schemas.workflow import WorkflowStatus
 
 
 class DynamoDBWorkflowRepository:
@@ -28,15 +25,10 @@ class DynamoDBWorkflowRepository:
             "description": workflow.description,
             "version": workflow.version,
             "status": workflow.status.value,
+            "job_type": workflow.job_type,
+            "requires_confirmation": workflow.requires_confirmation,
+            "min_confidence": Decimal(str(workflow.min_confidence)),
             "trigger_examples": workflow.trigger_examples,
-            "steps": [
-                {
-                    "name": step.name,
-                    "type": step.type.value,
-                    "tool_name": step.tool_name,
-                }
-                for step in workflow.steps
-            ],
             "created_at": now,
             "updated_at": now,
         }
@@ -74,15 +66,10 @@ class DynamoDBWorkflowRepository:
             workflow_id=item["workflow_id"],
             name=item["name"],
             description=item.get("description"),
-            version=int(item["version"]),
             status=WorkflowStatus(item["status"]),
+            job_type=item.get("job_type", ""),
+            requires_confirmation=bool(item.get("requires_confirmation", False)),
+            min_confidence=float(item.get("min_confidence", 0.0)),
             trigger_examples=item.get("trigger_examples", []),
-            steps=[
-                WorkflowStepCreate(
-                    name=step["name"],
-                    type=WorkflowStepType(step["type"]),
-                    tool_name=step.get("tool_name"),
-                )
-                for step in item.get("steps", [])
-            ],
+            version=int(item["version"]),
         )

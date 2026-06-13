@@ -10,31 +10,22 @@ class WorkflowStatus(str, Enum):
     DISABLED = "DISABLED"
 
 
-class WorkflowStepType(str, Enum):
-    LLM = "LLM"
-    TOOL = "TOOL"
-    RAG = "RAG"
-    NOTIFICATION = "NOTIFICATION"
-
-
-class WorkflowStepCreate(BaseModel):
-    name: str = Field(..., min_length=1)
-    type: WorkflowStepType
-    tool_name: Optional[str] = None
-
-
 class CreateWorkflowRequest(BaseModel):
     name: str = Field(..., min_length=1)
     description: Optional[str] = None
+    job_type: str = Field(..., min_length=1)
+    requires_confirmation: bool
+    min_confidence: float = Field(..., ge=0.0, le=1.0)
     trigger_examples: List[str] = Field(default_factory=list)
-    steps: List[WorkflowStepCreate]
 
 
 class WorkflowResponse(BaseModel):
     workflow_id: str
     name: str
     description: Optional[str]
-    version: int
     status: WorkflowStatus
+    job_type: str
+    requires_confirmation: bool
+    min_confidence: float
     trigger_examples: List[str]
-    steps: List[WorkflowStepCreate]
+    version: int

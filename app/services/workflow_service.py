@@ -8,7 +8,6 @@ from app.schemas.workflow import (
     CreateWorkflowRequest,
     WorkflowResponse,
     WorkflowStatus,
-    WorkflowStepType,
 )
 
 
@@ -17,27 +16,16 @@ workflow_repository = DynamoDBWorkflowRepository()
 
 class WorkflowService:
     def create_workflow(self, request: CreateWorkflowRequest) -> WorkflowResponse:
-        if len(request.steps) == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Workflow must contain at least one step",
-            )
-
-        for step in request.steps:
-            if step.type == WorkflowStepType.TOOL and not step.tool_name:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"TOOL step {step.name} must have tool_name",
-                )
-
         workflow = WorkflowDefinition(
             workflow_id=str(uuid4()),
             name=request.name,
             description=request.description,
-            version=1,
             status=WorkflowStatus.DRAFT,
+            job_type=request.job_type,
+            requires_confirmation=request.requires_confirmation,
+            min_confidence=request.min_confidence,
             trigger_examples=request.trigger_examples,
-            steps=request.steps,
+            version=1,
         )
 
         saved = workflow_repository.save(workflow)
@@ -59,15 +47,36 @@ class WorkflowService:
             for workflow in workflow_repository.find_all()
         ]
 
+    def publish_workflow(self, workflow_id: str) -> WorkflowResponse:
+        workflow = workflow_repository.find_by_id(workflow_id)
+        if workflow is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Workflow not found: {workflow_id}",
+            )
+
+        workflow.status = WorkflowStatus.PUBLISHED
+        saved = workflow_repository.save(workflow)
+        return self._to_response(saved)
+
+    def list_published_workflows(self):
+        return [
+            workflow
+            for workflow in workflow_repository.find_all()
+            if workflow.status == WorkflowStatus.PUBLISHED
+        ]
+
     def _to_response(self, workflow: WorkflowDefinition) -> WorkflowResponse:
         return WorkflowResponse(
             workflow_id=workflow.workflow_id,
             name=workflow.name,
             description=workflow.description,
-            version=workflow.version,
             status=workflow.status,
+            job_type=workflow.job_type,
+            requires_confirmation=workflow.requires_confirmation,
+            min_confidence=workflow.min_confidence,
             trigger_examples=workflow.trigger_examples,
-            steps=workflow.steps,
+            version=workflow.version,
         )
 
 
