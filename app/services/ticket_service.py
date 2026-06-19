@@ -1,3 +1,4 @@
+import re
 from uuid import uuid4
 
 from app.schemas.ticket import (
@@ -6,7 +7,10 @@ from app.schemas.ticket import (
     TicketResponse,
     TicketStatus,
 )
+from app.schemas.workflow_run import WorkflowRunStatus
 from app.services.llm_router_service import llm_router_service
+from app.services.sqs_service import sqs_service
+from app.services.workflow_run_service import workflow_run_service
 from app.services.workflow_service import workflow_service
 
 
@@ -34,10 +38,34 @@ class TicketService:
             if requires_confirmation
             else TicketStatus.PENDING
         )
+        workflow_run_status = (
+            WorkflowRunStatus.WAITING_FOR_CONFIRMATION
+            if requires_confirmation
+            else WorkflowRunStatus.PENDING
+        )
+        workflow_run = workflow_run_service.create_workflow_run(
+            ticket_id=ticket_id,
+            workflow_id=selected["workflow_id"],
+            job_type=selected["job_type"],
+            customer_id=request.customer_id,
+            status=workflow_run_status,
+        )
+
+        if (
+            workflow_run.status == WorkflowRunStatus.PENDING
+            and selected["job_type"] == "REFUND_JOB"
+        ):
+            sqs_service.send_refund_workflow_message(
+                workflow_run_id=workflow_run.workflow_run_id,
+                ticket_id=ticket_id,
+                workflow_id=selected["workflow_id"],
+                customer_id=request.customer_id,
+                order_id=self._extract_order_id(request.message),
+            )
 
         return TicketResponse(
             ticket_id=ticket_id,
-            workflow_run_id=f"run_{uuid4()}",
+            workflow_run_id=workflow_run.workflow_run_id,
             selected_workflow=SelectedWorkflowResponse(
                 workflow_id=selected["workflow_id"],
                 name=selected["name"],
@@ -48,6 +76,10 @@ class TicketService:
             status=ticket_status,
             requires_confirmation=requires_confirmation,
         )
+
+    def _extract_order_id(self, message: str) -> str:
+        match = re.search(r"\bO\d+\b", message, re.IGNORECASE)
+        return match.group(0).upper() if match else ""
 
 
 ticket_service = TicketService()

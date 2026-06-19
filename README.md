@@ -40,6 +40,71 @@ Optional:
 
 Do not put API keys in code, README files, logs, Docker images, or Git commits.
 
+## SQS Refund Worker
+
+Refund workflow execution is asynchronous:
+
+1. A workflow run is created with status `PENDING`.
+2. A refund execution message is sent to AWS SQS.
+3. The refund worker receives the message.
+4. The worker checks workflow run status for idempotency.
+5. `RefundJob` runs.
+6. The workflow run becomes `SUCCEEDED` or `FAILED`.
+7. The SQS message is deleted only after successful processing.
+
+Create an SQS Standard queue:
+
+- Queue name: `ai-workflow-execution-queue`
+- Visibility timeout: 30 seconds
+- Message retention period: 4 days
+- Receive message wait time: 10 seconds
+
+Create a DynamoDB table for workflow run state:
+
+- Table name: `workflow_runs`
+- Primary key: `workflow_run_id`
+- Primary key type: String
+
+Required environment variables:
+
+- `WORKFLOW_QUEUE_URL`
+- `AWS_REGION`
+
+Optional environment variables:
+
+- `WORKFLOW_RUN_TABLE_NAME`, default `workflow_runs`
+- `WORKER_RUN_ONCE`, set to `true` to process one polling batch
+
+Do not commit AWS credentials or the queue URL.
+
+Send a test refund message:
+
+```bash
+python test_send_refund_message.py
+```
+
+Run the worker continuously:
+
+```bash
+python -m app.workers.refund_worker
+```
+
+Run one worker polling batch:
+
+```bash
+$env:WORKER_RUN_ONCE = "true"
+python -m app.workers.refund_worker
+```
+
+Reflection answers:
+
+1. `SQSService` should not update workflow run status because its only responsibility is moving messages.
+2. The worker checks workflow run status before running `RefundJob` to avoid duplicate execution.
+3. The worker deletes an SQS message only after job success so failed work can be retried.
+4. Processing the same refund twice could issue a duplicate refund or send duplicate customer updates.
+5. A DLQ helps debug failed messages by keeping messages that exceed retry limits.
+6. In production, monitor messages received, jobs started, jobs succeeded, jobs failed, duplicates skipped, messages deleted, visible messages, not-visible messages, oldest message age, and DLQ depth.
+
 ## Bonus DynamoDB
 
 This bonus version saves and reads workflow definitions from DynamoDB.
@@ -66,6 +131,8 @@ venv\Scripts\activate
 pip install -r requirements.txt
 $env:AWS_REGION = "us-west-2"
 $env:WORKFLOW_TABLE_NAME = "workflow_definitions"
+$env:WORKFLOW_RUN_TABLE_NAME = "workflow_runs"
+$env:WORKFLOW_QUEUE_URL = "<your-sqs-queue-url>"
 $env:OPENAI_API_KEY = "<your-openai-api-key>"
 $env:OPENAI_MODEL = "gpt-4o-mini"
 uvicorn app.main:app --reload
