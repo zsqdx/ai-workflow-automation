@@ -33,35 +33,32 @@ class TicketService:
             )
 
         requires_confirmation = bool(selected["requires_confirmation"])
-        ticket_status = (
-            TicketStatus.WAITING_FOR_CONFIRMATION
-            if requires_confirmation
-            else TicketStatus.PENDING
-        )
-        workflow_run_status = (
-            WorkflowRunStatus.WAITING_FOR_CONFIRMATION
-            if requires_confirmation
-            else WorkflowRunStatus.PENDING
-        )
+        workflow_type = self._workflow_type_for(selected["job_type"])
+        workflow_run_status = WorkflowRunStatus.PENDING
+        if workflow_type != "REFUND_WORKFLOW" and requires_confirmation:
+            workflow_run_status = WorkflowRunStatus.WAITING_FOR_CONFIRMATION
+
+        ticket_status = TicketStatus.PENDING
+        if workflow_run_status == WorkflowRunStatus.WAITING_FOR_CONFIRMATION:
+            ticket_status = TicketStatus.WAITING_FOR_CONFIRMATION
+
         workflow_run = workflow_run_service.create_workflow_run(
             ticket_id=ticket_id,
             workflow_id=selected["workflow_id"],
-            job_type=selected["job_type"],
+            workflow_type=workflow_type,
             customer_id=request.customer_id,
+            input={
+                "order_id": self._extract_order_id(request.message),
+                "message": request.message,
+            },
             status=workflow_run_status,
         )
 
         if (
             workflow_run.status == WorkflowRunStatus.PENDING
-            and selected["job_type"] == "REFUND_JOB"
+            and workflow_run.workflow_type == "REFUND_WORKFLOW"
         ):
-            sqs_service.send_refund_workflow_message(
-                workflow_run_id=workflow_run.workflow_run_id,
-                ticket_id=ticket_id,
-                workflow_id=selected["workflow_id"],
-                customer_id=request.customer_id,
-                order_id=self._extract_order_id(request.message),
-            )
+            sqs_service.send_workflow_run_message(workflow_run.workflow_run_id)
 
         return TicketResponse(
             ticket_id=ticket_id,
@@ -80,6 +77,11 @@ class TicketService:
     def _extract_order_id(self, message: str) -> str:
         match = re.search(r"\bO\d+\b", message, re.IGNORECASE)
         return match.group(0).upper() if match else ""
+
+    def _workflow_type_for(self, job_type: str) -> str:
+        if job_type == "REFUND_JOB":
+            return "REFUND_WORKFLOW"
+        return job_type
 
 
 ticket_service = TicketService()

@@ -40,17 +40,27 @@ Optional:
 
 Do not put API keys in code, README files, logs, Docker images, or Git commits.
 
-## SQS Refund Worker
+## SQS Listener and Workflow Execution
 
-Refund workflow execution is asynchronous:
+Workflow execution is asynchronous:
 
 1. A workflow run is created with status `PENDING`.
-2. A refund execution message is sent to AWS SQS.
-3. The refund worker receives the message.
-4. The worker checks workflow run status for idempotency.
-5. `RefundJob` runs.
-6. The workflow run becomes `SUCCEEDED` or `FAILED`.
-7. The SQS message is deleted only after successful processing.
+2. An SQS message is sent with `workflow_run_id` only.
+3. The workflow execution listener receives the message.
+4. The listener loads the workflow run from the repository.
+5. The listener checks workflow run status for idempotency.
+6. `RefundWorkflow` runs for `REFUND_WORKFLOW`.
+7. The workflow run becomes `SUCCEEDED` or `FAILED`.
+8. The SQS message is deleted only after successful processing.
+
+SQS carries the reference. The repository stores the full execution state.
+The SQS message body contains only:
+
+```json
+{
+  "workflow_run_id": "run_refund_123"
+}
+```
 
 Create an SQS Standard queue:
 
@@ -73,37 +83,40 @@ Required environment variables:
 Optional environment variables:
 
 - `WORKFLOW_RUN_TABLE_NAME`, default `workflow_runs`
-- `WORKER_RUN_ONCE`, set to `true` to process one polling batch
+- `LISTENER_RUN_ONCE`, set to `true` to process one polling batch
 
 Do not commit AWS credentials or the queue URL.
 
-Send a test refund message:
+Send a test workflow run message:
 
 ```bash
-python test_send_refund_message.py
+python test_send_workflow_run_message.py
 ```
 
-Run the worker continuously:
+Run the listener continuously:
 
 ```bash
-python -m app.workers.refund_worker
+python -m app.listeners.workflow_execution_listener
 ```
 
-Run one worker polling batch:
+Run one listener polling batch:
 
 ```bash
-$env:WORKER_RUN_ONCE = "true"
-python -m app.workers.refund_worker
+$env:LISTENER_RUN_ONCE = "true"
+python -m app.listeners.workflow_execution_listener
 ```
 
 Reflection answers:
 
-1. `SQSService` should not update workflow run status because its only responsibility is moving messages.
-2. The worker checks workflow run status before running `RefundJob` to avoid duplicate execution.
-3. The worker deletes an SQS message only after job success so failed work can be retried.
-4. Processing the same refund twice could issue a duplicate refund or send duplicate customer updates.
-5. A DLQ helps debug failed messages by keeping messages that exceed retry limits.
-6. In production, monitor messages received, jobs started, jobs succeeded, jobs failed, duplicates skipped, messages deleted, visible messages, not-visible messages, oldest message age, and DLQ depth.
+1. We send only `workflow_run_id` so the SQS message stays small and stable.
+2. The repository is the source of truth because it stores the latest workflow run state and input.
+3. `SQSService` should not update workflow run status because its only responsibility is moving messages.
+4. The listener checks workflow run status before running `RefundWorkflow` to avoid duplicate execution.
+5. The listener deletes an SQS message only after workflow success so failed work can be retried.
+6. Processing the same refund workflow twice could issue a duplicate refund or send duplicate customer updates.
+7. Synchronous workflow execution inside the listener is acceptable because the async boundary is between the API and SQS.
+8. A DLQ helps debug failed workflow executions by keeping messages that exceed retry limits.
+9. In production, monitor messages received, workflows started, workflows succeeded, workflows failed, duplicates skipped, messages deleted, visible messages, not-visible messages, oldest message age, and DLQ depth.
 
 ## Bonus DynamoDB
 

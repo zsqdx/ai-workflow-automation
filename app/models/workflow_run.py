@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from app.schemas.workflow_run import WorkflowRunStatus
 
@@ -9,8 +9,9 @@ class WorkflowRunDefinition:
     workflow_run_id: str
     ticket_id: str
     workflow_id: str
-    job_type: str
+    workflow_type: str
     customer_id: str
+    input: Dict[str, Any]
     status: WorkflowRunStatus
     created_at: str
     updated_at: str

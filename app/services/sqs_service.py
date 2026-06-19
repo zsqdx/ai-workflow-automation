@@ -11,22 +11,9 @@ class SQSService:
         self.queue_url = os.getenv("WORKFLOW_QUEUE_URL")
         self.client = boto3.client("sqs", region_name=self.region_name)
 
-    def send_refund_workflow_message(
-        self,
-        workflow_run_id: str,
-        ticket_id: str,
-        workflow_id: str,
-        customer_id: str,
-        order_id: str,
-    ) -> str:
+    def send_workflow_run_message(self, workflow_run_id: str) -> str:
         message_body = {
-            "event_type": "WORKFLOW_RUN_CREATED",
             "workflow_run_id": workflow_run_id,
-            "ticket_id": ticket_id,
-            "workflow_id": workflow_id,
-            "job_type": "REFUND_JOB",
-            "customer_id": customer_id,
-            "order_id": order_id,
         }
 
         response = self.client.send_message(

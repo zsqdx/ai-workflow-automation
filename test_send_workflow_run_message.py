@@ -7,21 +7,19 @@ def main():
     workflow_run_service.create_workflow_run(
         workflow_run_id="run_refund_123",
         ticket_id="ticket_123",
-        workflow_id="wf_refund",
-        job_type="REFUND_JOB",
         customer_id="c_123",
+        workflow_id="wf_refund",
+        workflow_type="REFUND_WORKFLOW",
         status=WorkflowRunStatus.PENDING,
+        input={
+            "order_id": "O123",
+            "message": "I want a refund",
+        },
     )
 
-    message_id = sqs_service.send_refund_workflow_message(
-        workflow_run_id="run_refund_123",
-        ticket_id="ticket_123",
-        workflow_id="wf_refund",
-        customer_id="c_123",
-        order_id="O123",
-    )
+    message_id = sqs_service.send_workflow_run_message("run_refund_123")
 
-    print("Refund workflow message sent successfully")
+    print("Workflow run message sent successfully")
     print(f"MessageId: {message_id}")
 
 
