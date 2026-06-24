@@ -9,7 +9,7 @@ class SQSService:
     def __init__(self):
         self.region_name = os.getenv("AWS_REGION") or "us-west-2"
         self.queue_url = os.getenv("WORKFLOW_QUEUE_URL")
-        self.client = boto3.client("sqs", region_name=self.region_name)
+        self._client = None
 
     def send_workflow_run_message(self, workflow_run_id: str) -> str:
         message_body = {
@@ -40,6 +40,12 @@ class SQSService:
         if not self.queue_url:
             raise RuntimeError("WORKFLOW_QUEUE_URL is not set")
         return self.queue_url
+
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = boto3.client("sqs", region_name=self.region_name)
+        return self._client
 
 
 sqs_service = SQSService()

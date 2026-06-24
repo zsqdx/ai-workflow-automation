@@ -145,8 +145,6 @@ pip install -r requirements.txt
 $env:AWS_REGION = "us-west-2"
 $env:WORKFLOW_TABLE_NAME = "workflow_definitions"
 $env:WORKFLOW_RUN_TABLE_NAME = "workflow_runs"
-$env:WORKFLOW_QUEUE_URL = "<your-sqs-queue-url>"
-$env:OPENAI_API_KEY = "<your-openai-api-key>"
 $env:OPENAI_MODEL = "gpt-4o-mini"
 uvicorn app.main:app --reload
 ```
@@ -224,3 +222,85 @@ Stop Docker Compose:
 ```bash
 docker compose down
 ```
+
+## ECS Deployment
+
+This deployment runs only the FastAPI API server. It does not run the SQS
+listener or any background worker.
+
+Build the Docker image:
+
+```bash
+docker build -t ai-workflow-service .
+```
+
+Run the API container locally:
+
+```bash
+docker run --rm -p 8000:8000 ai-workflow-service
+```
+
+Local health check:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Expected response:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+ECR repository URI placeholder:
+
+```text
+<aws-account-id>.dkr.ecr.<aws-region>.amazonaws.com/ai-workflow-service
+```
+
+Tag the image for ECR:
+
+```bash
+docker tag ai-workflow-service:latest <aws-account-id>.dkr.ecr.<aws-region>.amazonaws.com/ai-workflow-service:latest
+```
+
+Push the image to ECR:
+
+```bash
+docker push <aws-account-id>.dkr.ecr.<aws-region>.amazonaws.com/ai-workflow-service:latest
+```
+
+ECS settings:
+
+- Cluster name: `ai-workflow-cluster`
+- Task definition name: `ai-workflow-api-task`
+- Service name: `ai-workflow-api-service`
+- Container port: `8000`
+- Container command: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+- CloudWatch log group: `/ecs/ai-workflow-api`
+
+CloudWatch Logs Insights query:
+
+```sql
+fields @timestamp, @message
+| sort @timestamp desc
+| limit 20
+```
+
+ECS reflection answers:
+
+1. A Docker image is a packaged filesystem and startup configuration for running an application.
+2. A container is a running instance of a Docker image.
+3. ECR is Amazon Elastic Container Registry, a private registry for Docker images.
+4. ECS needs the image in ECR because ECS tasks pull images from a registry, not from a laptop.
+5. ECS is Amazon Elastic Container Service, which runs and manages containers on AWS.
+6. Fargate is the serverless ECS compute option where AWS manages the container hosts.
+7. A task definition is the blueprint for running a container, including image, CPU, memory, ports, roles, environment variables, and logs.
+8. An ECS service keeps the desired number of tasks running and replaces unhealthy tasks.
+9. The task execution role is used by ECS to pull images and write logs; the task role is used by application code inside the container to call AWS services.
+10. The app must listen on `0.0.0.0` so traffic from outside the container can reach it.
+11. A CloudWatch log group is a named collection of log streams.
+12. A CloudWatch log stream is the ordered logs from one source, such as one ECS task container.
+13. Container logs go to stdout/stderr, and the ECS `awslogs` log driver sends them to CloudWatch Logs.

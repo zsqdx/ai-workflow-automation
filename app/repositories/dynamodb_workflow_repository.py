@@ -13,9 +13,7 @@ class DynamoDBWorkflowRepository:
     def __init__(self):
         self.table_name = os.getenv("WORKFLOW_TABLE_NAME") or "workflow_definitions"
         self.region_name = os.getenv("AWS_REGION") or "us-west-2"
-
-        dynamodb = boto3.resource("dynamodb", region_name=self.region_name)
-        self.table = dynamodb.Table(self.table_name)
+        self._table = None
 
     def save(self, workflow: WorkflowDefinition) -> WorkflowDefinition:
         now = datetime.now(timezone.utc).isoformat()
@@ -60,6 +58,13 @@ class DynamoDBWorkflowRepository:
                 return workflows
 
             scan_kwargs["ExclusiveStartKey"] = last_evaluated_key
+
+    @property
+    def table(self):
+        if self._table is None:
+            dynamodb = boto3.resource("dynamodb", region_name=self.region_name)
+            self._table = dynamodb.Table(self.table_name)
+        return self._table
 
     def _to_workflow_definition(self, item: dict) -> WorkflowDefinition:
         return WorkflowDefinition(

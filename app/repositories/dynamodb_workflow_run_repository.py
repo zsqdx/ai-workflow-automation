@@ -11,9 +11,7 @@ class DynamoDBWorkflowRunRepository:
     def __init__(self):
         self.table_name = os.getenv("WORKFLOW_RUN_TABLE_NAME") or "workflow_runs"
         self.region_name = os.getenv("AWS_REGION") or "us-west-2"
-
-        dynamodb = boto3.resource("dynamodb", region_name=self.region_name)
-        self.table = dynamodb.Table(self.table_name)
+        self._table = None
 
     def save(self, workflow_run: WorkflowRunDefinition) -> WorkflowRunDefinition:
         item = {
@@ -54,3 +52,10 @@ class DynamoDBWorkflowRunRepository:
             completed_at=item.get("completed_at"),
             error_message=item.get("error_message"),
         )
+
+    @property
+    def table(self):
+        if self._table is None:
+            dynamodb = boto3.resource("dynamodb", region_name=self.region_name)
+            self._table = dynamodb.Table(self.table_name)
+        return self._table
