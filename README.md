@@ -304,3 +304,231 @@ ECS reflection answers:
 11. A CloudWatch log group is a named collection of log streams.
 12. A CloudWatch log stream is the ordered logs from one source, such as one ECS task container.
 13. Container logs go to stdout/stderr, and the ECS `awslogs` log driver sends them to CloudWatch Logs.
+
+## EKS Deployment
+
+This deployment runs two Kubernetes Deployments on Amazon EKS:
+
+- API pods run FastAPI and expose `GET /health`.
+- Listener pod polls SQS, loads `workflow_run` records from DynamoDB, runs `RefundWorkflow`, and deletes SQS messages only after successful processing.
+
+EKS settings:
+
+- ECR image URI: `163596510317.dkr.ecr.us-east-2.amazonaws.com/ai-workflow-service:latest`
+- EKS cluster name: `ai-workflow-eks`
+- AWS region: `us-east-2`
+- Namespace name: `ai-workflow`
+- ServiceAccount name: `ai-workflow-sa`
+- ConfigMap name: `ai-workflow-config`
+- API Deployment name: `ai-workflow-api`
+- API Service name: `ai-workflow-api-service`
+- Listener Deployment name: `ai-workflow-listener`
+
+Create the EKS cluster:
+
+```bash
+eksctl create cluster \
+  --name ai-workflow-eks \
+  --region us-east-2 \
+  --nodes 2 \
+  --node-type t3.small \
+  --managed
+```
+
+Create the IAM policy used by pods:
+
+```bash
+aws iam create-policy \
+  --policy-name AIWorkflowPodPolicy \
+  --policy-document file://infra/ai-workflow-pod-policy.json
+```
+
+Enable the EKS OIDC provider:
+
+```bash
+eksctl utils associate-iam-oidc-provider \
+  --cluster ai-workflow-eks \
+  --region us-east-2 \
+  --approve
+```
+
+Create the Kubernetes ServiceAccount connected to the IAM policy:
+
+```bash
+eksctl create iamserviceaccount \
+  --name ai-workflow-sa \
+  --namespace ai-workflow \
+  --cluster ai-workflow-eks \
+  --region us-east-2 \
+  --attach-policy-arn <AI_WORKFLOW_POLICY_ARN> \
+  --approve
+```
+
+Apply Kubernetes resources:
+
+```bash
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl patch configmap ai-workflow-config \
+  -n ai-workflow \
+  --type merge \
+  -p '{"data":{"WORKFLOW_QUEUE_URL":"<WORKFLOW_QUEUE_URL>"}}'
+kubectl apply -f k8s/secret.yaml
+kubectl apply -f k8s/api-deployment.yaml
+kubectl apply -f k8s/api-service.yaml
+kubectl apply -f k8s/listener-deployment.yaml
+```
+
+The real SQS queue URL is injected during deployment and should not be committed.
+
+Verify:
+
+```bash
+kubectl get nodes
+kubectl get namespace ai-workflow
+kubectl get serviceaccount -n ai-workflow
+kubectl describe serviceaccount ai-workflow-sa -n ai-workflow
+kubectl get configmap -n ai-workflow
+kubectl get deployment -n ai-workflow
+kubectl get pods -n ai-workflow
+kubectl get service -n ai-workflow
+```
+
+Health check:
+
+```bash
+curl http://<EXTERNAL_LOAD_BALANCER_DNS>/health
+```
+
+Expected result:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+SQS message body:
+
+```json
+{
+  "event_type": "WORKFLOW_RUN_CREATED",
+  "workflow_run_id": "run_refund_eks_001"
+}
+```
+
+DynamoDB `workflow_run` before listener processing:
+
+```json
+{
+  "workflow_run_id": "run_refund_eks_001",
+  "workflow_type": "REFUND_WORKFLOW",
+  "status": "PENDING"
+}
+```
+
+DynamoDB `workflow_run` after listener processing:
+
+```json
+{
+  "workflow_run_id": "run_refund_eks_001",
+  "workflow_type": "REFUND_WORKFLOW",
+  "status": "SUCCEEDED"
+}
+```
+
+Expected listener logs:
+
+```text
+Received SQS message
+workflow_run_id=run_refund_eks_001
+Loaded workflow_run
+Current status=PENDING
+Updated status to RUNNING
+Starting refund workflow
+Step 1: Extracting order id
+Step 2: Checking order status
+Step 3: Issuing refund
+Step 4: Generating customer reply
+Step 5: Updating ticket status
+Updated status to SUCCEEDED
+SQS message deleted
+```
+
+Duplicate message behavior:
+
+```text
+workflow_run_id=run_refund_eks_001 already completed. Skipping duplicate message.
+SQS message deleted
+```
+
+EKS deployment verification on July 3, 2026:
+
+- LoadBalancer DNS: `aa57ab1f986164d16aca4a09cff84b2d-1504477969.us-east-2.elb.amazonaws.com`
+- Health endpoint: `GET /health`
+- Health result: `{"status":"ok"}`
+- Test workflow run: `run_refund_eks_002`
+- Initial DynamoDB status: `PENDING`
+- Final DynamoDB status: `SUCCEEDED`
+- Duplicate message queue depth after processing: visible `0`, not visible `0`
+
+Listener log excerpt:
+
+```text
+Received 1 SQS message(s)
+Received SQS message
+workflow_run_id=run_refund_eks_002
+Loaded workflow_run
+Current status=PENDING
+Updated status to RUNNING
+Starting refund workflow
+workflow_run_id=run_refund_eks_002
+order_id=O123
+Step 1: Extracting order id
+Step 2: Checking order status
+Step 3: Issuing refund
+Step 4: Generating customer reply
+Step 5: Updating ticket status
+Refund workflow completed
+Updated status to SUCCEEDED
+SQS message deleted
+```
+
+Duplicate message log excerpt:
+
+```text
+workflow_run_id=run_refund_eks_002 already completed. Skipping duplicate message.
+SQS message deleted
+```
+
+Cleanup:
+
+```bash
+kubectl delete -f k8s/listener-deployment.yaml
+kubectl delete -f k8s/api-service.yaml
+kubectl delete -f k8s/api-deployment.yaml
+kubectl delete -f k8s/secret.yaml
+kubectl delete -f k8s/configmap.yaml
+kubectl delete -f k8s/namespace.yaml
+
+eksctl delete cluster \
+  --name ai-workflow-eks \
+  --region us-east-2
+```
+
+Cleanup confirmation: cleanup was not run yet because the EKS deployment is left active for grading and verification.
+
+EKS reflection answers:
+
+1. A ConfigMap stores non-sensitive configuration values for pods, such as region, table names, and environment names.
+2. A ServiceAccount is the Kubernetes identity assigned to pods.
+3. Pods need a ServiceAccount so they can receive the correct permissions and, on EKS, assume an IAM role through IRSA.
+4. A Deployment manages replicated pods and replaces them when they crash or are updated.
+5. A Kubernetes Service gives stable network access to a set of pods.
+6. The API needs a Service because users call it over HTTP; the listener does not need one because it only polls SQS.
+7. The SQS message only contains `workflow_run_id` so the queue carries a small event reference instead of duplicating workflow state.
+8. The listener reads `workflow_run` from DynamoDB because the repository is the source of truth.
+9. `workflow_run` status represents the lifecycle of one workflow execution, such as `PENDING`, `RUNNING`, `SUCCEEDED`, or `FAILED`.
+10. The listener deletes an SQS message only after success so failed work can be retried.
+11. The same AWS IAM user can be reused from a laptop to create infrastructure, but it should not be used inside pods.
+12. AWS access keys should not be put inside pods because IAM roles and ServiceAccounts provide safer, revocable, short-lived credentials.

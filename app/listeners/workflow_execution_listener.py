@@ -20,8 +20,11 @@ class WorkflowExecutionListener:
         self.refund_workflow = refund_workflow or RefundWorkflow()
 
     def run_once(self):
+        print("Polling SQS")
         messages = self.sqs_service.receive_messages()
         print(f"Received {len(messages)} SQS message(s)")
+        if not messages:
+            print("No messages found")
 
         for raw_message in messages:
             receipt_handle = raw_message["ReceiptHandle"]
@@ -110,6 +113,7 @@ class WorkflowExecutionListener:
 
 
 if __name__ == "__main__":
+    print("Listener started")
     listener = WorkflowExecutionListener()
     if os.getenv("LISTENER_RUN_ONCE", "").lower() == "true":
         listener.run_once()

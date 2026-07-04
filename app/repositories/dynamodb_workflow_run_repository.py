@@ -9,7 +9,11 @@ from app.schemas.workflow_run import WorkflowRunStatus
 
 class DynamoDBWorkflowRunRepository:
     def __init__(self):
-        self.table_name = os.getenv("WORKFLOW_RUN_TABLE_NAME") or "workflow_runs"
+        self.table_name = (
+            os.getenv("WORKFLOW_RUN_TABLE_NAME")
+            or os.getenv("DYNAMODB_WORKFLOW_RUNS_TABLE")
+            or "workflow_runs"
+        )
         self.region_name = os.getenv("AWS_REGION") or "us-west-2"
         self._table = None
 

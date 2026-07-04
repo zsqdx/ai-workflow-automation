@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-workflow-api
+  namespace: ai-workflow
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-workflow-api
+  template:
+    metadata:
+      labels:
+        app: ai-workflow-api
+    spec:
+      serviceAccountName: ai-workflow-sa
+      containers:
+        - name: ai-workflow-api
+          image: 163596510317.dkr.ecr.us-east-2.amazonaws.com/ai-workflow-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          command:
+            - uvicorn
+            - app.main:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8000"
+          envFrom:
+            - configMapRef:
+                name: ai-workflow-config
+            - secretRef:
+                name: ai-workflow-secret
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
