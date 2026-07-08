@@ -24,21 +24,14 @@ class WorkflowService:
             name=request.name,
             description=request.description,
             status=WorkflowStatus.DRAFT,
-            job_type=request.job_type,
-            workflow_type=request.workflow_type
-            or self._workflow_type_for(request.job_type),
+            job_type=self._job_type_for(request.workflow_type),
+            workflow_type=request.workflow_type,
             requires_confirmation=request.requires_confirmation,
             min_confidence=request.min_confidence,
             trigger_examples=request.trigger_examples,
             version=1,
             notification_template_id=request.notification_template_id,
-            input_schema=(
-                request.input_schema
-                or self._default_input_schema_for(
-                    request.workflow_type
-                    or self._workflow_type_for(request.job_type)
-                )
-            ),
+            input_schema=request.input_schema.model_dump(),
         )
 
         saved = workflow_repository.save(workflow)
@@ -114,6 +107,11 @@ class WorkflowService:
         if job_type == "REFUND_JOB":
             return "REFUND_WORKFLOW"
         return job_type
+
+    def _job_type_for(self, workflow_type: str) -> str:
+        if workflow_type == "REFUND_WORKFLOW":
+            return "REFUND_JOB"
+        return workflow_type
 
     def _default_input_schema_for(self, workflow_type: str) -> dict:
         if workflow_type != "REFUND_WORKFLOW":
