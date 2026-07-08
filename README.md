@@ -118,6 +118,77 @@ Reflection answers:
 8. A DLQ helps debug failed workflow executions by keeping messages that exceed retry limits.
 9. In production, monitor messages received, workflows started, workflows succeeded, workflows failed, duplicates skipped, messages deleted, visible messages, not-visible messages, oldest message age, and DLQ depth.
 
+## Assignment 1: Workflow Input Service
+
+Ticket creation now requires `customer_email` and validates it with Pydantic
+`EmailStr`. The backend does not ask AI to infer customer contact details from
+the message.
+
+Example ticket request:
+
+```json
+{
+  "customer_id": "customer_001",
+  "customer_email": "student@example.com",
+  "message": "I want a refund for order O123 because it arrived damaged."
+}
+```
+
+Workflow definitions now support:
+
+- `workflow_type`
+- `notification_template_id`
+- `input_schema`
+
+Refund workflow definitions use this required input schema:
+
+- `order_id`, string, must match `^O[0-9]+$`
+- `refund_reason`, string, minimum length 3
+
+`WorkflowDefinitionValidator` checks workflow definitions before publishing.
+For `REFUND_WORKFLOW`, the definition must include both `order_id` and
+`refund_reason`; invalid or unknown fields are rejected.
+
+Ticket flow:
+
+1. Create a ticket and store `customer_email`.
+2. Route the message to a published workflow.
+3. Load the selected workflow definition.
+4. Extract workflow-specific input with `WorkflowInputService`.
+5. Validate required fields with `FieldValidationService`.
+6. Create `workflow_run` only when required fields are valid.
+7. Send the SQS message only after a valid `workflow_run` exists.
+
+Valid workflow run input:
+
+```json
+{
+  "customer_email": "student@example.com",
+  "raw_message": "I want a refund for order O123 because it arrived damaged.",
+  "order_id": "O123",
+  "refund_reason": "it arrived damaged"
+}
+```
+
+If `order_id` is missing, the API returns `NEEDS_MORE_INFO` and does not create
+a pending workflow run:
+
+```json
+{
+  "status": "NEEDS_MORE_INFO",
+  "missing_fields": ["order_id"],
+  "message": "Please provide your order ID so we can process your refund."
+}
+```
+
+Validation checks completed:
+
+- Valid refund request returns `WORKFLOW_STARTED`.
+- Missing `order_id` returns `NEEDS_MORE_INFO`.
+- Invalid email returns FastAPI/Pydantic validation error.
+- Invalid `order_id` format returns `VALIDATION_FAILED`.
+- Invalid refund workflow definition without `order_id` is rejected.
+
 ## Bonus DynamoDB
 
 This bonus version saves and reads workflow definitions from DynamoDB.

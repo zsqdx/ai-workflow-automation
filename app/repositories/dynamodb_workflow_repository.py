@@ -24,9 +24,12 @@ class DynamoDBWorkflowRepository:
             "version": workflow.version,
             "status": workflow.status.value,
             "job_type": workflow.job_type,
+            "workflow_type": workflow.workflow_type,
             "requires_confirmation": workflow.requires_confirmation,
             "min_confidence": Decimal(str(workflow.min_confidence)),
             "trigger_examples": workflow.trigger_examples,
+            "notification_template_id": workflow.notification_template_id,
+            "input_schema": workflow.input_schema,
             "created_at": now,
             "updated_at": now,
         }
@@ -73,8 +76,59 @@ class DynamoDBWorkflowRepository:
             description=item.get("description"),
             status=WorkflowStatus(item["status"]),
             job_type=item.get("job_type", ""),
+            workflow_type=item.get("workflow_type")
+            or self._workflow_type_for(item.get("job_type", "")),
             requires_confirmation=bool(item.get("requires_confirmation", False)),
             min_confidence=float(item.get("min_confidence", 0.0)),
             trigger_examples=item.get("trigger_examples", []),
+            notification_template_id=item.get("notification_template_id"),
+            input_schema=item.get("input_schema")
+            or self._default_input_schema_for(
+                item.get("workflow_type")
+                or self._workflow_type_for(item.get("job_type", ""))
+            ),
             version=int(item["version"]),
         )
+
+    def _workflow_type_for(self, job_type: str) -> str:
+        if job_type == "REFUND_JOB":
+            return "REFUND_WORKFLOW"
+        return job_type
+
+    def _default_input_schema_for(self, workflow_type: str) -> dict:
+        if workflow_type != "REFUND_WORKFLOW":
+            return {}
+
+        return {
+            "required_fields": [
+                {
+                    "name": "order_id",
+                    "type": "string",
+                    "description": (
+                        "The order ID the customer wants to refund"
+                    ),
+                    "examples": ["O123", "O456"],
+                    "validation_regex": "^O[0-9]+$",
+                    "missing_field_question": (
+                        "Please provide your order ID so we can process "
+                        "your refund."
+                    ),
+                },
+                {
+                    "name": "refund_reason",
+                    "type": "string",
+                    "description": (
+                        "The reason why the customer wants a refund"
+                    ),
+                    "examples": [
+                        "item arrived damaged",
+                        "wrong item delivered",
+                    ],
+                    "min_length": 3,
+                    "missing_field_question": (
+                        "Please tell us why you are requesting a refund."
+                    ),
+                },
+            ],
+            "optional_fields": [],
+        }

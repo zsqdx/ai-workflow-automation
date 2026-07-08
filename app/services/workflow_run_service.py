@@ -22,6 +22,7 @@ class WorkflowRunService:
         workflow_type: str,
         customer_id: str,
         input: dict,
+        notification_template_id: Optional[str] = None,
         workflow_run_id: Optional[str] = None,
         status: WorkflowRunStatus = WorkflowRunStatus.PENDING,
     ) -> WorkflowRunDefinition:
@@ -36,6 +37,7 @@ class WorkflowRunService:
             status=status,
             created_at=now,
             updated_at=now,
+            notification_template_id=notification_template_id,
         )
 
         return workflow_run_repository.save(workflow_run)

@@ -1,13 +1,20 @@
 class RefundWorkflow:
-    def run(self, workflow_run) -> None:
-        order_id = workflow_run.input.get("order_id")
+    def run(self, workflow_run) -> dict:
+        workflow_input = workflow_run.input
+        order_id = workflow_input["order_id"]
+        refund_reason = workflow_input["refund_reason"]
 
         print("Starting refund workflow")
         print(f"workflow_run_id={workflow_run.workflow_run_id}")
         print(f"order_id={order_id}")
-        print("Step 1: Extracting order id")
-        print("Step 2: Checking order status")
-        print("Step 3: Issuing refund")
-        print("Step 4: Generating customer reply")
-        print("Step 5: Updating ticket status")
+        print(f"refund_reason={refund_reason}")
+        print("Step 1: Checking order")
+        print("Step 2: Validating refund eligibility")
+        print("Step 3: Processing refund")
         print("Refund workflow completed")
+
+        return {
+            "order_id": order_id,
+            "refund_reason": refund_reason,
+            "refund_status": "PROCESSED",
+        }
