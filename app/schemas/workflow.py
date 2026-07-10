@@ -38,6 +38,17 @@ class CreateWorkflowRequest(BaseModel):
     input_schema: WorkflowInputSchema
 
 
+class UpdateWorkflowRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    workflow_type: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    requires_confirmation: bool = False
+    min_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+    trigger_examples: List[str] = Field(default_factory=list)
+    notification_template_id: Optional[str] = None
+    input_schema: WorkflowInputSchema
+
+
 class WorkflowResponse(BaseModel):
     workflow_id: str
     name: str

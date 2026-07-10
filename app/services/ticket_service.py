@@ -33,6 +33,10 @@ class TicketService:
         )
 
         if selected is None:
+            ticket_repository.update_status(
+                ticket_id=ticket["ticket_id"],
+                status=TicketStatus.NO_MATCH.value,
+            )
             return TicketResponse(
                 ticket_id=ticket_id,
                 workflow_run_id=None,
@@ -45,16 +49,6 @@ class TicketService:
         workflow_definition = workflow_service.get_workflow_definition(
             selected["workflow_id"]
         )
-        extraction_result = workflow_input_service.extract_input(
-            workflow_definition=workflow_definition,
-            customer_message=request.message,
-        )
-        validation_result = field_validation_service.validate(
-            input_schema=workflow_definition.input_schema,
-            extracted_fields=extraction_result["fields"],
-        )
-
-        requires_confirmation = bool(selected["requires_confirmation"])
         selected_workflow = SelectedWorkflowResponse(
             workflow_id=selected["workflow_id"],
             name=selected["name"],
@@ -62,6 +56,19 @@ class TicketService:
             confidence=selected["confidence"],
             reason=selected["reason"],
         )
+
+        extraction_result = workflow_input_service.extract_input(
+            workflow_definition=workflow_definition,
+            customer_message=request.message,
+        )
+        validation_result = field_validation_service.validate(
+            input_schema=workflow_definition.input_schema,
+            extracted_fields=extraction_result["fields"],
+            confidence=extraction_result["confidence"],
+            min_confidence=workflow_definition.min_confidence,
+        )
+
+        requires_confirmation = bool(selected["requires_confirmation"])
 
         if not validation_result["is_valid"]:
             response_status = TicketStatus.NEEDS_MORE_INFO
@@ -101,16 +108,13 @@ class TicketService:
             status=WorkflowRunStatus.PENDING,
         )
 
-        if (
-            workflow_run.status == WorkflowRunStatus.PENDING
-            and workflow_run.workflow_type == "REFUND_WORKFLOW"
-        ):
-            sqs_service.send_workflow_run_message(workflow_run.workflow_run_id)
-
+        sqs_service.send_workflow_run_message(workflow_run.workflow_run_id)
         ticket_repository.update_status(
             ticket_id=ticket["ticket_id"],
             status=TicketStatus.WORKFLOW_STARTED.value,
+            workflow_run_id=workflow_run.workflow_run_id,
         )
+
         return TicketResponse(
             ticket_id=ticket["ticket_id"],
             workflow_run_id=workflow_run.workflow_run_id,

@@ -3,9 +3,12 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from app.models.workflow import WorkflowDefinition
-from app.repositories.dynamodb_workflow_repository import DynamoDBWorkflowRepository
+from app.repositories.dynamodb_workflow_repository import (
+    DynamoDBWorkflowRepository,
+)
 from app.schemas.workflow import (
     CreateWorkflowRequest,
+    UpdateWorkflowRequest,
     WorkflowResponse,
     WorkflowStatus,
 )
@@ -34,6 +37,38 @@ class WorkflowService:
             input_schema=request.input_schema.model_dump(),
         )
 
+        self._validate(workflow)
+        saved = workflow_repository.save(workflow)
+        return self._to_response(saved)
+
+    def update_workflow(
+        self,
+        workflow_id: str,
+        request: UpdateWorkflowRequest,
+    ) -> WorkflowResponse:
+        existing = workflow_repository.find_by_id(workflow_id)
+        if existing is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Workflow not found: {workflow_id}",
+            )
+
+        workflow = WorkflowDefinition(
+            workflow_id=workflow_id,
+            name=request.name,
+            description=request.description,
+            status=existing.status,
+            job_type=self._job_type_for(request.workflow_type),
+            workflow_type=request.workflow_type,
+            requires_confirmation=request.requires_confirmation,
+            min_confidence=request.min_confidence,
+            trigger_examples=request.trigger_examples,
+            version=existing.version + 1,
+            notification_template_id=request.notification_template_id,
+            input_schema=request.input_schema.model_dump(),
+        )
+
+        self._validate(workflow)
         saved = workflow_repository.save(workflow)
         return self._to_response(saved)
 
@@ -44,7 +79,6 @@ class WorkflowService:
                 status_code=404,
                 detail=f"Workflow not found: {workflow_id}",
             )
-
         return self._to_response(workflow)
 
     def get_workflow_definition(self, workflow_id: str) -> WorkflowDefinition:
@@ -54,7 +88,6 @@ class WorkflowService:
                 status_code=404,
                 detail=f"Workflow not found: {workflow_id}",
             )
-
         return workflow
 
     def list_workflows(self):
@@ -71,11 +104,7 @@ class WorkflowService:
                 detail=f"Workflow not found: {workflow_id}",
             )
 
-        try:
-            workflow_definition_validator.validate(workflow)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+        self._validate(workflow)
         workflow.status = WorkflowStatus.PUBLISHED
         saved = workflow_repository.save(workflow)
         return self._to_response(saved)
@@ -103,53 +132,16 @@ class WorkflowService:
             version=workflow.version,
         )
 
-    def _workflow_type_for(self, job_type: str) -> str:
-        if job_type == "REFUND_JOB":
-            return "REFUND_WORKFLOW"
-        return job_type
-
     def _job_type_for(self, workflow_type: str) -> str:
         if workflow_type == "REFUND_WORKFLOW":
             return "REFUND_JOB"
         return workflow_type
 
-    def _default_input_schema_for(self, workflow_type: str) -> dict:
-        if workflow_type != "REFUND_WORKFLOW":
-            return {}
-
-        return {
-            "required_fields": [
-                {
-                    "name": "order_id",
-                    "type": "string",
-                    "description": (
-                        "The order ID the customer wants to refund"
-                    ),
-                    "examples": ["O123", "O456"],
-                    "validation_regex": "^O[0-9]+$",
-                    "missing_field_question": (
-                        "Please provide your order ID so we can process "
-                        "your refund."
-                    ),
-                },
-                {
-                    "name": "refund_reason",
-                    "type": "string",
-                    "description": (
-                        "The reason why the customer wants a refund"
-                    ),
-                    "examples": [
-                        "item arrived damaged",
-                        "wrong item delivered",
-                    ],
-                    "min_length": 3,
-                    "missing_field_question": (
-                        "Please tell us why you are requesting a refund."
-                    ),
-                },
-            ],
-            "optional_fields": [],
-        }
+    def _validate(self, workflow: WorkflowDefinition) -> None:
+        try:
+            workflow_definition_validator.validate(workflow)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 workflow_service = WorkflowService()

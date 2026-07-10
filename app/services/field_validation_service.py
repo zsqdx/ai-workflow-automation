@@ -2,9 +2,27 @@ import re
 
 
 class FieldValidationService:
-    def validate(self, input_schema: dict, extracted_fields: dict) -> dict:
+    def validate(
+        self,
+        input_schema: dict,
+        extracted_fields: dict,
+        confidence: float,
+        min_confidence: float,
+    ) -> dict:
         missing_fields = []
         validation_errors = []
+
+        if confidence < min_confidence:
+            validation_errors.append(
+                {
+                    "field": "confidence",
+                    "message": (
+                        f"Extraction confidence {confidence} is below "
+                        f"required minimum {min_confidence}"
+                    ),
+                }
+            )
+
         required_fields = input_schema.get("required_fields", [])
 
         for field_schema in required_fields:
@@ -18,10 +36,7 @@ class FieldValidationService:
             expected_type = field_schema.get("type")
             if expected_type == "string" and not isinstance(value, str):
                 validation_errors.append(
-                    {
-                        "field": name,
-                        "message": f"{name} must be a string",
-                    }
+                    {"field": name, "message": f"{name} must be a string"}
                 )
                 continue
 
@@ -30,9 +45,7 @@ class FieldValidationService:
                 validation_errors.append(
                     {
                         "field": name,
-                        "message": (
-                            f"{name} does not match required format"
-                        ),
+                        "message": f"{name} does not match required format",
                     }
                 )
 
@@ -46,8 +59,7 @@ class FieldValidationService:
                     {
                         "field": name,
                         "message": (
-                            f"{name} must be at least {min_length} "
-                            "characters"
+                            f"{name} must be at least {min_length} characters"
                         ),
                     }
                 )

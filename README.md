@@ -118,7 +118,7 @@ Reflection answers:
 8. A DLQ helps debug failed workflow executions by keeping messages that exceed retry limits.
 9. In production, monitor messages received, workflows started, workflows succeeded, workflows failed, duplicates skipped, messages deleted, visible messages, not-visible messages, oldest message age, and DLQ depth.
 
-## Assignment 1: Workflow Input Service
+## Workflow Input Service Assignment
 
 Ticket creation now requires `customer_email` and validates it with Pydantic
 `EmailStr`. The backend does not ask AI to infer customer contact details from
@@ -139,15 +139,27 @@ Workflow definitions now support:
 - `workflow_type`
 - `notification_template_id`
 - `input_schema`
+- `PUT /api/v1/admin/workflows/{workflow_id}` updates a definition and increments its version
 
 Refund workflow definitions use this required input schema:
 
 - `order_id`, string, must match `^O[0-9]+$`
 - `refund_reason`, string, minimum length 3
 
-`WorkflowDefinitionValidator` checks workflow definitions before publishing.
+`WorkflowDefinitionValidator` checks workflow definitions during create, update,
+and publish.
 For `REFUND_WORKFLOW`, the definition must include both `order_id` and
-`refund_reason`; invalid or unknown fields are rejected.
+`refund_reason`; `customer_name` is optional, and invalid or unknown fields are
+rejected. Definitions also require a description and at least one trigger
+example.
+
+`WorkflowInputService` uses the OpenAI Responses API with structured JSON
+output. It reads `OPENAI_API_KEY` from the environment and uses
+`OPENAI_MODEL` (default `gpt-4o-mini`). Extraction errors are surfaced instead
+of guessing values with a rule-based fallback.
+
+Tickets are stored in the DynamoDB `tickets` table using `ticket_id` as the
+partition key. Set `TICKET_TABLE_NAME` to override the default table name.
 
 Ticket flow:
 
@@ -155,7 +167,8 @@ Ticket flow:
 2. Route the message to a published workflow.
 3. Load the selected workflow definition.
 4. Extract workflow-specific input with `WorkflowInputService`.
-5. Validate required fields with `FieldValidationService`.
+5. Validate required fields, regex, minimum length, and extraction confidence
+   with `FieldValidationService`.
 6. Create `workflow_run` only when required fields are valid.
 7. Send the SQS message only after a valid `workflow_run` exists.
 
@@ -187,6 +200,8 @@ Validation checks completed:
 - Missing `order_id` returns `NEEDS_MORE_INFO`.
 - Invalid email returns FastAPI/Pydantic validation error.
 - Invalid `order_id` format returns `VALIDATION_FAILED`.
+- Extraction confidence below the workflow's `min_confidence` returns
+  `VALIDATION_FAILED`.
 - Invalid refund workflow definition without `order_id` is rejected.
 
 ## Bonus DynamoDB

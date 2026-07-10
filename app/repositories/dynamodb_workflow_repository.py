@@ -11,12 +11,20 @@ from app.schemas.workflow import WorkflowStatus
 
 class DynamoDBWorkflowRepository:
     def __init__(self):
-        self.table_name = os.getenv("WORKFLOW_TABLE_NAME") or "workflow_definitions"
+        self.table_name = (
+            os.getenv("WORKFLOW_TABLE_NAME")
+            or os.getenv("DYNAMODB_WORKFLOW_DEFINITIONS_TABLE")
+            or "workflow_definitions"
+        )
         self.region_name = os.getenv("AWS_REGION") or "us-west-2"
         self._table = None
 
     def save(self, workflow: WorkflowDefinition) -> WorkflowDefinition:
         now = datetime.now(timezone.utc).isoformat()
+        response = self.table.get_item(Key={"workflow_id": workflow.workflow_id})
+        existing_item = response.get("Item") or {}
+        created_at = existing_item.get("created_at", now)
+
         item = {
             "workflow_id": workflow.workflow_id,
             "name": workflow.name,
@@ -30,7 +38,7 @@ class DynamoDBWorkflowRepository:
             "trigger_examples": workflow.trigger_examples,
             "notification_template_id": workflow.notification_template_id,
             "input_schema": workflow.input_schema,
-            "created_at": now,
+            "created_at": created_at,
             "updated_at": now,
         }
 
@@ -70,24 +78,26 @@ class DynamoDBWorkflowRepository:
         return self._table
 
     def _to_workflow_definition(self, item: dict) -> WorkflowDefinition:
+        workflow_type = item.get("workflow_type") or self._workflow_type_for(
+            item.get("job_type", "")
+        )
+
         return WorkflowDefinition(
             workflow_id=item["workflow_id"],
             name=item["name"],
             description=item.get("description"),
             status=WorkflowStatus(item["status"]),
-            job_type=item.get("job_type", ""),
-            workflow_type=item.get("workflow_type")
-            or self._workflow_type_for(item.get("job_type", "")),
+            job_type=item.get("job_type") or self._job_type_for(workflow_type),
+            workflow_type=workflow_type,
             requires_confirmation=bool(item.get("requires_confirmation", False)),
-            min_confidence=float(item.get("min_confidence", 0.0)),
+            min_confidence=float(item.get("min_confidence", 0.7)),
             trigger_examples=item.get("trigger_examples", []),
             notification_template_id=item.get("notification_template_id"),
-            input_schema=item.get("input_schema")
-            or self._default_input_schema_for(
-                item.get("workflow_type")
-                or self._workflow_type_for(item.get("job_type", ""))
+            input_schema=self._from_dynamodb(
+                item.get("input_schema")
+                or {"required_fields": [], "optional_fields": []}
             ),
-            version=int(item["version"]),
+            version=int(item.get("version", 1)),
         )
 
     def _workflow_type_for(self, job_type: str) -> str:
@@ -95,40 +105,21 @@ class DynamoDBWorkflowRepository:
             return "REFUND_WORKFLOW"
         return job_type
 
-    def _default_input_schema_for(self, workflow_type: str) -> dict:
-        if workflow_type != "REFUND_WORKFLOW":
-            return {}
+    def _job_type_for(self, workflow_type: str) -> str:
+        if workflow_type == "REFUND_WORKFLOW":
+            return "REFUND_JOB"
+        return workflow_type
 
-        return {
-            "required_fields": [
-                {
-                    "name": "order_id",
-                    "type": "string",
-                    "description": (
-                        "The order ID the customer wants to refund"
-                    ),
-                    "examples": ["O123", "O456"],
-                    "validation_regex": "^O[0-9]+$",
-                    "missing_field_question": (
-                        "Please provide your order ID so we can process "
-                        "your refund."
-                    ),
-                },
-                {
-                    "name": "refund_reason",
-                    "type": "string",
-                    "description": (
-                        "The reason why the customer wants a refund"
-                    ),
-                    "examples": [
-                        "item arrived damaged",
-                        "wrong item delivered",
-                    ],
-                    "min_length": 3,
-                    "missing_field_question": (
-                        "Please tell us why you are requesting a refund."
-                    ),
-                },
-            ],
-            "optional_fields": [],
-        }
+    def _from_dynamodb(self, value):
+        if isinstance(value, Decimal):
+            if value % 1 == 0:
+                return int(value)
+            return float(value)
+        if isinstance(value, list):
+            return [self._from_dynamodb(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                key: self._from_dynamodb(item)
+                for key, item in value.items()
+            }
+        return value

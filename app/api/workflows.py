@@ -2,7 +2,11 @@ from typing import List
 
 from fastapi import APIRouter, status
 
-from app.schemas.workflow import CreateWorkflowRequest, WorkflowResponse
+from app.schemas.workflow import (
+    CreateWorkflowRequest,
+    UpdateWorkflowRequest,
+    WorkflowResponse,
+)
 from app.services.workflow_service import workflow_service
 
 
@@ -16,6 +20,14 @@ router = APIRouter(prefix="/admin/workflows", tags=["workflows"])
 )
 def create_workflow(request: CreateWorkflowRequest):
     return workflow_service.create_workflow(request)
+
+
+@router.put(
+    "/{workflow_id}",
+    response_model=WorkflowResponse,
+)
+def update_workflow(workflow_id: str, request: UpdateWorkflowRequest):
+    return workflow_service.update_workflow(workflow_id, request)
 
 
 @router.get(

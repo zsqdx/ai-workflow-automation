@@ -21,4 +21,7 @@ class WorkflowDefinition:
 
     def __post_init__(self):
         if self.input_schema is None:
-            self.input_schema = {}
+            self.input_schema = {
+                "required_fields": [],
+                "optional_fields": [],
+            }
