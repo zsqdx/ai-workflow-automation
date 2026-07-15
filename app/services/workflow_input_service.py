@@ -8,14 +8,39 @@ from app.workflows.workflow_specs import WORKFLOW_SPECS
 
 
 class OpenAIWorkflowInputClient:
-    def __init__(self):
+    def __init__(
+        self,
+        response_schema: Optional[dict] = None,
+        response_name: str = "workflow_input_extraction",
+    ):
         self.client = OpenAI() if os.getenv("OPENAI_API_KEY") else None
         self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        self.response_schema = response_schema
+        self.response_name = response_name
 
     def generate_json(self, prompt: str) -> dict:
         if self.client is None:
             raise RuntimeError("OPENAI_API_KEY is not set")
 
+        response_schema = (
+            self.response_schema or self._workflow_input_response_schema()
+        )
+
+        response = self.client.responses.create(
+            model=self.model,
+            input=prompt,
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": self.response_name,
+                    "strict": True,
+                    "schema": response_schema,
+                }
+            },
+        )
+        return json.loads(response.output_text)
+
+    def _workflow_input_response_schema(self) -> dict:
         field_names = sorted(
             {
                 field_name
@@ -29,41 +54,28 @@ class OpenAIWorkflowInputClient:
             }
             for field_name in field_names
         }
-
-        response = self.client.responses.create(
-            model=self.model,
-            input=prompt,
-            text={
-                "format": {
-                    "type": "json_schema",
-                    "name": "workflow_input_extraction",
-                    "strict": True,
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "fields": {
-                                "type": "object",
-                                "properties": field_properties,
-                                "required": field_names,
-                                "additionalProperties": False,
-                            },
-                            "missing_fields": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
-                            "confidence": {"type": "number"},
-                        },
-                        "required": [
-                            "fields",
-                            "missing_fields",
-                            "confidence",
-                        ],
-                        "additionalProperties": False,
-                    },
-                }
+        return {
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "type": "object",
+                    "properties": field_properties,
+                    "required": field_names,
+                    "additionalProperties": False,
+                },
+                "missing_fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "confidence": {"type": "number"},
             },
-        )
-        return json.loads(response.output_text)
+            "required": [
+                "fields",
+                "missing_fields",
+                "confidence",
+            ],
+            "additionalProperties": False,
+        }
 
 
 class WorkflowInputService:

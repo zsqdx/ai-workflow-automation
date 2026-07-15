@@ -26,6 +26,7 @@ This version stores workflow definitions in DynamoDB.
 - POST /api/v1/tickets
 - GET /api/v1/tickets/{ticket_id}
 - GET /api/v1/workflow-runs/{workflow_run_id}
+- POST /api/v1/rag/answer
 
 ## LLM Router
 
@@ -42,6 +43,25 @@ Optional:
 - `OPENAI_MODEL`, default `gpt-4o-mini`
 
 Do not put API keys in code, README files, logs, Docker images, or Git commits.
+
+## RAG Question Answering
+
+The standalone RAG endpoint loads markdown policies from `knowledge_base/`,
+retrieves relevant documents with deterministic keyword scoring, and asks the
+existing OpenAI client to answer using only the retrieved context.
+
+```http
+POST /api/v1/rag/answer
+Content-Type: application/json
+
+{
+  "question": "What is your refund policy for damaged items?"
+}
+```
+
+The response includes the grounded answer and only the retrieved sources used
+by the model. Questions with no matching knowledge return an information-not-
+available answer with an empty `sources` list without calling OpenAI.
 
 ## SQS Listener and Workflow Execution
 
