@@ -19,10 +19,13 @@ This version stores workflow definitions in DynamoDB.
 
 - GET /health
 - POST /api/v1/admin/workflows
+- PUT /api/v1/admin/workflows/{workflow_id}
 - GET /api/v1/admin/workflows/{workflow_id}
 - POST /api/v1/admin/workflows/{workflow_id}/publish
 - GET /api/v1/admin/workflows
 - POST /api/v1/tickets
+- GET /api/v1/tickets/{ticket_id}
+- GET /api/v1/workflow-runs/{workflow_run_id}
 
 ## LLM Router
 
@@ -50,7 +53,8 @@ Workflow execution is asynchronous:
 4. The listener loads the workflow run from the repository.
 5. The listener checks workflow run status for idempotency.
 6. `RefundWorkflow` runs for `REFUND_WORKFLOW`.
-7. The workflow run becomes `SUCCEEDED` or `FAILED`.
+7. The workflow result is saved and the run becomes `SUCCEEDED`, or the run
+   becomes `FAILED` when execution fails.
 8. The SQS message is deleted only after successful processing.
 
 SQS carries the reference. The repository stores the full execution state.
@@ -86,6 +90,10 @@ Optional environment variables:
 - `LISTENER_RUN_ONCE`, set to `true` to process one polling batch
 
 Do not commit AWS credentials or the queue URL.
+
+Ticket detail responses include the selected workflow ID, type, name, and the
+workflow run ID when execution has started. Workflow run detail responses
+include status, structured input, result, timestamps, and any execution error.
 
 Send a test workflow run message:
 

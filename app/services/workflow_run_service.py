@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -34,6 +34,7 @@ class WorkflowRunService:
             workflow_type=workflow_type,
             customer_id=customer_id,
             input=input,
+            result=None,
             status=status,
             created_at=now,
             updated_at=now,
@@ -57,6 +58,7 @@ class WorkflowRunService:
         workflow_run_id: str,
         status: str,
         error_message: Optional[str] = None,
+        result: Optional[Dict[str, Any]] = None,
     ) -> WorkflowRunDefinition:
         workflow_run = self.get_workflow_run(workflow_run_id)
         next_status = WorkflowRunStatus(status)
@@ -77,6 +79,9 @@ class WorkflowRunService:
             WorkflowRunStatus.CANCELLED,
         }:
             workflow_run.completed_at = now
+
+        if result is not None:
+            workflow_run.result = result
 
         if error_message is not None:
             workflow_run.error_message = error_message

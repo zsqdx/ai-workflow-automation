@@ -81,11 +81,12 @@ class WorkflowExecutionListener:
                 should_mark_failed = True
                 print("Updated status to RUNNING")
 
-                self.refund_workflow.run(workflow_run)
+                result = self.refund_workflow.run(workflow_run)
 
                 self.workflow_run_service.update_status(
                     workflow_run_id,
                     WorkflowRunStatus.SUCCEEDED.value,
+                    result=result,
                 )
                 should_mark_failed = False
                 print("Updated status to SUCCEEDED")

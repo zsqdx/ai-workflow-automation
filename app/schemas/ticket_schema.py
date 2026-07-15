@@ -1,6 +1,7 @@
 from app.schemas.ticket import (
     CreateTicketRequest,
     SelectedWorkflowResponse,
+    TicketDetailResponse,
     TicketResponse,
     TicketStatus,
 )
@@ -9,6 +10,7 @@ from app.schemas.ticket import (
 __all__ = [
     "CreateTicketRequest",
     "SelectedWorkflowResponse",
+    "TicketDetailResponse",
     "TicketResponse",
     "TicketStatus",
 ]

@@ -30,6 +30,9 @@ class DynamoDBTicketRepository:
             "message": message,
             "status": "CREATED",
             "workflow_run_id": None,
+            "selected_workflow_id": None,
+            "selected_workflow_type": None,
+            "selected_workflow_name": None,
             "created_at": now,
             "updated_at": now,
         }
@@ -41,6 +44,9 @@ class DynamoDBTicketRepository:
         ticket_id: str,
         status: str,
         workflow_run_id: Optional[str] = None,
+        selected_workflow_id: Optional[str] = None,
+        selected_workflow_type: Optional[str] = None,
+        selected_workflow_name: Optional[str] = None,
     ) -> Optional[dict]:
         now = datetime.now(timezone.utc).isoformat()
         update_expression = "SET #status = :status, updated_at = :updated_at"
@@ -53,6 +59,24 @@ class DynamoDBTicketRepository:
         if workflow_run_id is not None:
             update_expression += ", workflow_run_id = :workflow_run_id"
             expression_attribute_values[":workflow_run_id"] = workflow_run_id
+
+        if selected_workflow_id is not None:
+            update_expression += ", selected_workflow_id = :selected_workflow_id"
+            expression_attribute_values[":selected_workflow_id"] = (
+                selected_workflow_id
+            )
+
+        if selected_workflow_type is not None:
+            update_expression += ", selected_workflow_type = :selected_workflow_type"
+            expression_attribute_values[":selected_workflow_type"] = (
+                selected_workflow_type
+            )
+
+        if selected_workflow_name is not None:
+            update_expression += ", selected_workflow_name = :selected_workflow_name"
+            expression_attribute_values[":selected_workflow_name"] = (
+                selected_workflow_name
+            )
 
         self.table.update_item(
             Key={"ticket_id": ticket_id},

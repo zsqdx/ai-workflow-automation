@@ -72,12 +72,18 @@ class TicketService:
 
         if not validation_result["is_valid"]:
             response_status = TicketStatus.NEEDS_MORE_INFO
-            if validation_result["validation_errors"]:
+            if (
+                not validation_result["missing_fields"]
+                and validation_result["validation_errors"]
+            ):
                 response_status = TicketStatus.VALIDATION_FAILED
 
             ticket_repository.update_status(
                 ticket_id=ticket["ticket_id"],
                 status=response_status.value,
+                selected_workflow_id=workflow_definition.workflow_id,
+                selected_workflow_type=workflow_definition.workflow_type,
+                selected_workflow_name=workflow_definition.name,
             )
             return TicketResponse(
                 ticket_id=ticket["ticket_id"],
@@ -113,6 +119,9 @@ class TicketService:
             ticket_id=ticket["ticket_id"],
             status=TicketStatus.WORKFLOW_STARTED.value,
             workflow_run_id=workflow_run.workflow_run_id,
+            selected_workflow_id=workflow_definition.workflow_id,
+            selected_workflow_type=workflow_definition.workflow_type,
+            selected_workflow_name=workflow_definition.name,
         )
 
         return TicketResponse(

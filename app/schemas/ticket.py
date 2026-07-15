@@ -39,3 +39,17 @@ class TicketResponse(BaseModel):
     missing_fields: List[str] = Field(default_factory=list)
     validation_errors: List[dict] = Field(default_factory=list)
     message: Optional[str] = None
+
+
+class TicketDetailResponse(BaseModel):
+    ticket_id: str
+    customer_id: str
+    customer_email: EmailStr
+    message: str
+    status: TicketStatus
+    workflow_run_id: Optional[str] = None
+    selected_workflow_id: Optional[str] = None
+    selected_workflow_type: Optional[str] = None
+    selected_workflow_name: Optional[str] = None
+    created_at: str
+    updated_at: str
